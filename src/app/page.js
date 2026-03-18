@@ -273,21 +273,18 @@ export default function HomePage() {
   }
 
   return (
-    <div style={{ height: '100vh', overflow: 'hidden' }}>
+    <div style={{ height: '100vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
       {/* Mobile view toggle */}
       <div
         className="mobile-only"
         style={{
-          position: 'fixed',
-          top: '0',
-          left: 0,
-          right: 0,
-          zIndex: 999,
           background: 'var(--bg-sidebar)',
           borderBottom: '1px solid var(--border-light)',
           display: 'flex',
           padding: '8px 16px',
           gap: '8px',
+          flexShrink: 0,
+          zIndex: 999,
         }}
       >
         <button
@@ -328,7 +325,8 @@ export default function HomePage() {
       <div
         style={{
           display: 'flex',
-          height: '100vh',
+          flex: 1,
+          overflow: 'hidden',
         }}
       >
         {/* Map (left) */}
@@ -346,6 +344,7 @@ export default function HomePage() {
             onSelectDestination={handleSelectDestination}
             sidebarVisible={sidebarVisible}
             categories={allCategories}
+            mobileView={mobileView}
           />
 
           {/* Sidebar toggle button */}

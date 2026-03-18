@@ -5,14 +5,19 @@ export async function geocode(placeName) {
     if (!placeName) return null;
 
     try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+
         const response = await fetch(
             `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(placeName)}&limit=1`,
             {
                 headers: {
                     'User-Agent': 'MyTravelList/1.0',
                 },
+                signal: controller.signal,
             }
         );
+        clearTimeout(timeoutId);
 
         const data = await response.json();
 

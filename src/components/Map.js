@@ -50,7 +50,7 @@ function createCircleIcon(color, isDone, currentZoom = 4) {
     });
 }
 
-export default function MapComponent({ destinations, selectedId, onSelectDestination, sidebarVisible, categories = [] }) {
+export default function MapComponent({ destinations, selectedId, onSelectDestination, sidebarVisible, categories = [], mobileView }) {
     const mapRef = useRef(null);
     const mapInstanceRef = useRef(null);
     const markersRef = useRef({});
@@ -64,6 +64,16 @@ export default function MapComponent({ destinations, selectedId, onSelectDestina
         }, 320);
         return () => clearTimeout(timer);
     }, [sidebarVisible]);
+
+    // Resize map canvas when mobile view switches to 'map'
+    useEffect(() => {
+        if (mobileView === 'map') {
+            const timer = setTimeout(() => {
+                mapInstanceRef.current?.invalidateSize();
+            }, 50);
+            return () => clearTimeout(timer);
+        }
+    }, [mobileView]);
 
     // Initialize map
     useEffect(() => {
