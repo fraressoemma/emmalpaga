@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
+import { useLanguage } from '@/context/LanguageContext';
 
 function haversine(lat1, lon1, lat2, lon2) {
     const R = 6371;
@@ -34,6 +35,7 @@ function estimateFlightSeconds(distKm) {
 }
 
 export default function ItineraryPanel({ destinations, categories = [] }) {
+    const { t } = useLanguage();
     const [position, setPosition] = useState(null);
     const [locationName, setLocationName] = useState(null);
     const [geoLoading, setGeoLoading] = useState(true);
@@ -43,7 +45,7 @@ export default function ItineraryPanel({ destinations, categories = [] }) {
     // Geolocation + reverse geocode
     useEffect(() => {
         if (!navigator.geolocation) {
-            setError('Géolocalisation non supportée');
+            setError('geoNotSupported');
             setGeoLoading(false);
             return;
         }
@@ -64,13 +66,13 @@ export default function ItineraryPanel({ destinations, categories = [] }) {
                         data.address?.village ||
                         data.address?.county;
                     const country = data.address?.country;
-                    setLocationName(city ? `${city}, ${country}` : country || 'Position actuelle');
+                    setLocationName(city ? `${city}, ${country}` : country || null);
                 } catch {
-                    setLocationName('Position actuelle');
+                    setLocationName(null);
                 }
             },
             () => {
-                setError('Permission de localisation refusée');
+                setError('geoPermissionDenied');
                 setGeoLoading(false);
             },
             { timeout: 10000 }
@@ -143,7 +145,7 @@ export default function ItineraryPanel({ destinations, categories = [] }) {
         return (
             <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-muted)' }}>
                 <div style={{ fontSize: '40px', marginBottom: '12px' }}>📍</div>
-                <p style={{ fontSize: '14px' }}>Localisation en cours...</p>
+                <p style={{ fontSize: '14px' }}>{t.locating}</p>
             </div>
         );
     }
@@ -152,9 +154,9 @@ export default function ItineraryPanel({ destinations, categories = [] }) {
         return (
             <div style={{ textAlign: 'center', padding: '60px 20px' }}>
                 <div style={{ fontSize: '40px', marginBottom: '12px' }}>🚫</div>
-                <p style={{ fontSize: '14px', color: '#dc2626', fontWeight: 600 }}>{error}</p>
+                <p style={{ fontSize: '14px', color: '#dc2626', fontWeight: 600 }}>{t[error]}</p>
                 <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '8px' }}>
-                    Autorisez la localisation dans votre navigateur
+                    {t.allowLocation}
                 </p>
             </div>
         );
@@ -178,10 +180,10 @@ export default function ItineraryPanel({ destinations, categories = [] }) {
                 <span style={{ fontSize: '20px' }}>📍</span>
                 <div>
                     <p style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                        Depuis
+                        {t.from}
                     </p>
                     <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>
-                        {locationName || 'Position actuelle'}
+                        {locationName || t.currentPosition}
                     </p>
                 </div>
             </div>
@@ -261,7 +263,7 @@ export default function ItineraryPanel({ destinations, categories = [] }) {
                                 >
                                     <span style={{ fontSize: '16px' }}>✈️</span>
                                     <div>
-                                        <p style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 600 }}>Vol</p>
+                                        <p style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 600 }}>{t.flight}</p>
                                         <p style={{ fontSize: '13px', fontWeight: 800, color: '#B36A00' }}>{flightLabel}</p>
                                     </div>
                                 </div>
@@ -281,7 +283,7 @@ export default function ItineraryPanel({ destinations, categories = [] }) {
                                 >
                                     <span style={{ fontSize: '16px' }}>🚗</span>
                                     <div>
-                                        <p style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 600 }}>Route</p>
+                                        <p style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 600 }}>{t.road}</p>
                                         <p
                                             style={{
                                                 fontSize: '13px',
@@ -300,7 +302,7 @@ export default function ItineraryPanel({ destinations, categories = [] }) {
 
                 {results.length === 0 && (
                     <p style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '14px', padding: '40px 0' }}>
-                        Aucune destination avec coordonnées
+                        {t.noDestWithCoords}
                     </p>
                 )}
             </div>

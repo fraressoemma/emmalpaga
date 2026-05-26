@@ -1,8 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { db } from '@/lib/firebase';
-import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
+import { getDestinations, getProfile } from '@/lib/storage';
 import { useParams } from 'next/navigation';
 import nextDynamic from 'next/dynamic';
 
@@ -39,59 +38,27 @@ const STATUS_MAP = {
 
 export default function SharePage() {
     const params = useParams();
-    const userId = params.userId;
     const [destinations, setDestinations] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [selectedDest, setSelectedDest] = useState(null);
-    const [displayName, setDisplayName] = useState('');
 
     useEffect(() => {
-        async function fetchPublicData() {
-            try {
-                // Fetch profile
-                const profileQuery = query(collection(db, 'profiles'), where('id', '==', userId));
-                const profileSnapshot = await getDocs(profileQuery);
+        async function load() {
+            const profile = await getProfile();
 
-                if (profileSnapshot.empty || !profileSnapshot.docs[0].data().sharing_enabled) {
-                    setError('Cette liste n\'est pas partagée ou n\'existe pas.');
-                    setLoading(false);
-                    return;
-                }
-
-                const profileData = profileSnapshot.docs[0].data();
-                setDisplayName(profileData.display_name || 'Voyageur');
-
-                // Fetch public destinations
-                const destQuery = query(
-                    collection(db, 'destinations'),
-                    where('user_id', '==', userId),
-                    where('is_public', '==', true)
-                );
-
-                // Try with ordering first, fallback if index is missing
-                try {
-                    const orderedQuery = query(destQuery, orderBy('created_at', 'desc'));
-                    const destSnapshot = await getDocs(orderedQuery);
-                    setDestinations(destSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-                } catch (orderError) {
-                    console.log("Index for ordering might be missing, falling back to unordered", orderError);
-                    const destSnapshot = await getDocs(destQuery);
-                    const data = destSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    // Sort locally
-                    data.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
-                    setDestinations(data);
-                }
-            } catch (err) {
-                console.error("Error fetching public data:", err);
-                setError('Impossible de charger les destinations.');
+            if (!profile.sharing_enabled) {
+                setError('Cette liste n\'est pas partagée.');
+                setLoading(false);
+                return;
             }
 
+            const data = await getDestinations();
+            setDestinations(data);
             setLoading(false);
         }
-
-        fetchPublicData();
-    }, [userId]);
+        load();
+    }, []);
 
     const handleSelectDestination = useCallback((dest) => {
         setSelectedDest(dest);
@@ -177,7 +144,7 @@ export default function SharePage() {
                     <span style={{ fontSize: '24px' }}>🌍</span>
                     <div>
                         <h1 style={{ fontFamily: "'Outfit', sans-serif", fontSize: '16px', fontWeight: 800, color: 'var(--text-primary)' }}>
-                            Travel List de {displayName}
+                            Travel List de Voyageur
                         </h1>
                         <p style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
                             {destinations.length} destination{destinations.length !== 1 ? 's' : ''} • Vue publique

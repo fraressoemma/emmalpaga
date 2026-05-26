@@ -1,19 +1,23 @@
 'use client';
 
-const CATEGORY_MAP = {
-    dream: { emoji: '🌟', label: 'Rêve', className: 'badge-dream', color: 'var(--color-dream)' },
-    desire: { emoji: '✈️', label: 'Envie', className: 'badge-desire', color: 'var(--color-desire)' },
-    curiosity: { emoji: '🔍', label: 'Curiosité', className: 'badge-curiosity', color: 'var(--color-curiosity)' },
-};
-
-const STATUS_MAP = {
-    todo: { emoji: '📌', label: 'À faire', className: 'badge-todo' },
-    in_progress: { emoji: '🚀', label: 'En cours', className: 'badge-in_progress' },
-    done: { emoji: '✅', label: 'Fait', className: 'badge-done' },
-};
+import { useLanguage } from '@/context/LanguageContext';
 
 export default function DestinationModal({ destination, onClose, onEdit, onDelete }) {
+    const { t } = useLanguage();
+
     if (!destination) return null;
+
+    const STATUS_MAP = {
+        todo:        { label: t.statusTodo,       color: '#55556a', bg: 'rgba(255,255,255,0.05)' },
+        in_progress: { label: t.statusInProgress, color: '#9d8ff5', bg: 'rgba(124,109,240,0.12)' },
+        done:        { label: t.statusDone,       color: '#4ade80', bg: 'rgba(74,222,128,0.08)' },
+    };
+
+    const CATEGORY_MAP = {
+        dream:     { label: t.catDream,     color: 'var(--color-dream)' },
+        desire:    { label: t.catDesire,    color: 'var(--color-desire)' },
+        curiosity: { label: t.catCuriosity, color: 'var(--color-curiosity)' },
+    };
 
     const cat = CATEGORY_MAP[destination.category] || CATEGORY_MAP.curiosity;
     const status = STATUS_MAP[destination.status] || STATUS_MAP.todo;
@@ -23,15 +27,11 @@ export default function DestinationModal({ destination, onClose, onEdit, onDelet
             className="animate-fadeIn"
             onClick={onClose}
             style={{
-                position: 'fixed',
-                inset: 0,
+                position: 'fixed', inset: 0,
                 background: 'var(--bg-modal-overlay)',
-                backdropFilter: 'blur(4px)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                zIndex: 2000,
-                padding: '20px',
+                backdropFilter: 'blur(6px)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                zIndex: 2000, padding: '20px',
             }}
         >
             <div
@@ -39,110 +39,96 @@ export default function DestinationModal({ destination, onClose, onEdit, onDelet
                 onClick={(e) => e.stopPropagation()}
                 style={{
                     background: 'var(--bg-card)',
+                    border: '1px solid var(--border-light)',
                     borderRadius: 'var(--radius-xl)',
-                    width: '100%',
-                    maxWidth: '520px',
-                    maxHeight: '85vh',
-                    overflow: 'auto',
-                    boxShadow: '0 25px 50px rgba(0,0,0,0.25)',
+                    width: '100%', maxWidth: '480px',
+                    maxHeight: '85vh', overflow: 'auto',
+                    boxShadow: 'var(--shadow-xl)',
                 }}
             >
-                {/* Hero image */}
-                <div
-                    style={{
-                        width: '100%',
-                        height: '220px',
-                        background: destination.image_url
-                            ? `url(${destination.image_url}) center/cover no-repeat`
-                            : `linear-gradient(135deg, ${cat.color}33, ${cat.color}11)`,
-                        position: 'relative',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                    }}
-                >
-                    {!destination.image_url && (
-                        <span style={{ fontSize: '64px', opacity: 0.5 }}>🗺️</span>
-                    )}
+                {/* Hero */}
+                <div style={{
+                    width: '100%', height: '200px',
+                    background: destination.image_url
+                        ? `url(${destination.image_url}) center/cover no-repeat`
+                        : `linear-gradient(160deg, ${cat.color}14, var(--bg-elevated))`,
+                    position: 'relative', borderRadius: 'var(--radius-xl) var(--radius-xl) 0 0',
+                    display: 'flex', alignItems: 'flex-end',
+                }}>
+                    {/* Gradient overlay */}
+                    <div style={{
+                        position: 'absolute', inset: 0,
+                        background: 'linear-gradient(to top, rgba(23,23,29,0.9) 0%, transparent 60%)',
+                        borderRadius: 'inherit',
+                    }} />
 
-                    {/* Close button */}
+                    {/* Title inside hero */}
+                    <div style={{ position: 'relative', padding: '20px 24px', zIndex: 1 }}>
+                        <h2 style={{
+                            fontSize: '22px', fontWeight: 700,
+                            color: '#fff', letterSpacing: '-0.03em', lineHeight: 1.2,
+                            marginBottom: '8px',
+                        }}>
+                            {destination.name}
+                        </h2>
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                            <span style={{
+                                padding: '3px 10px',
+                                borderRadius: 'var(--radius-sm)',
+                                background: `${cat.color}20`,
+                                border: `1px solid ${cat.color}40`,
+                                color: cat.color,
+                                fontSize: '11px', fontWeight: 600,
+                                textTransform: 'uppercase', letterSpacing: '0.04em',
+                            }}>
+                                {cat.label}
+                            </span>
+                            <span style={{
+                                padding: '3px 10px',
+                                borderRadius: 'var(--radius-sm)',
+                                background: status.bg,
+                                color: status.color,
+                                fontSize: '11px', fontWeight: 600,
+                                textTransform: 'uppercase', letterSpacing: '0.04em',
+                            }}>
+                                {status.label}
+                            </span>
+                        </div>
+                    </div>
+
+                    {/* Close */}
                     <button
                         onClick={onClose}
                         style={{
-                            position: 'absolute',
-                            top: '14px',
-                            right: '14px',
-                            width: '36px',
-                            height: '36px',
-                            borderRadius: '50%',
-                            background: 'rgba(0,0,0,0.4)',
+                            position: 'absolute', top: '14px', right: '14px',
+                            width: '32px', height: '32px', borderRadius: '50%',
+                            background: 'rgba(0,0,0,0.5)',
                             backdropFilter: 'blur(8px)',
-                            border: 'none',
-                            color: 'white',
-                            fontSize: '18px',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            transition: 'background 0.2s',
+                            border: '1px solid rgba(255,255,255,0.1)',
+                            color: 'rgba(255,255,255,0.8)',
+                            fontSize: '14px', cursor: 'pointer',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            transition: 'background 0.15s',
+                            zIndex: 2,
                         }}
-                        onMouseEnter={(e) => e.target.style.background = 'rgba(0,0,0,0.6)'}
-                        onMouseLeave={(e) => e.target.style.background = 'rgba(0,0,0,0.4)'}
+                        onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(0,0,0,0.7)'}
+                        onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(0,0,0,0.5)'}
                     >
                         ✕
                     </button>
                 </div>
 
-                {/* Content */}
+                {/* Body */}
                 <div style={{ padding: '24px' }}>
-                    {/* Title + badges */}
-                    <h2
-                        style={{
-                            fontFamily: "'Outfit', sans-serif",
-                            fontSize: '24px',
-                            fontWeight: 800,
-                            color: 'var(--text-primary)',
-                            marginBottom: '12px',
-                            letterSpacing: '-0.02em',
-                        }}
-                    >
-                        {destination.name}
-                    </h2>
-
-                    <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', flexWrap: 'wrap' }}>
-                        <span className={`badge ${cat.className}`} style={{ fontSize: '13px', padding: '5px 14px' }}>
-                            {cat.emoji} {cat.label}
-                        </span>
-                        <span className={`badge ${status.className}`} style={{ fontSize: '13px', padding: '5px 14px' }}>
-                            {status.emoji} {status.label}
-                        </span>
-                    </div>
-
-                    {/* Details grid */}
-                    <div
-                        style={{
-                            display: 'grid',
-                            gap: '16px',
-                            marginBottom: '20px',
-                        }}
-                    >
+                    <div style={{ display: 'grid', gap: '20px' }}>
                         {destination.budget && (
-                            <div>
-                                <p style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>
-                                    💰 Budget estimé
-                                </p>
-                                <p style={{ fontSize: '15px', color: 'var(--text-primary)', fontWeight: 500 }}>
-                                    {destination.budget}
-                                </p>
-                            </div>
+                            <Field label={t.estimatedBudget} value={destination.budget} />
                         )}
 
-                        {destination.companions && destination.companions.length > 0 && (
+                        {destination.companions?.length > 0 && (
                             <div>
-                                <p style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>
-                                    👥 Avec qui
-                                </p>
-                                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                                <Label>{t.withWho}</Label>
+                                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '6px' }}>
                                     {destination.companions.map((name, i) => (
                                         <span key={i} className="tag">{name}</span>
                                     ))}
@@ -152,37 +138,57 @@ export default function DestinationModal({ destination, onClose, onEdit, onDelet
 
                         {destination.notes && (
                             <div>
-                                <p style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>
-                                    📝 Notes personnelles
-                                </p>
-                                <div
-                                    style={{
-                                        padding: '14px',
-                                        background: '#f8fafc',
-                                        borderRadius: 'var(--radius-md)',
-                                        fontSize: '14px',
-                                        lineHeight: 1.6,
-                                        color: 'var(--text-secondary)',
-                                        whiteSpace: 'pre-wrap',
-                                    }}
-                                >
+                                <Label>{t.notes}</Label>
+                                <p style={{
+                                    marginTop: '6px',
+                                    padding: '12px 14px',
+                                    background: 'var(--bg-elevated)',
+                                    borderRadius: 'var(--radius-md)',
+                                    border: '1px solid var(--border-subtle)',
+                                    fontSize: '13px', lineHeight: 1.65,
+                                    color: 'var(--text-secondary)',
+                                    whiteSpace: 'pre-wrap',
+                                }}>
                                     {destination.notes}
-                                </div>
+                                </p>
                             </div>
                         )}
                     </div>
 
-                    {/* Action buttons */}
-                    <div style={{ display: 'flex', gap: '10px', paddingTop: '16px', borderTop: '1px solid var(--border-light)' }}>
-                        <button className="btn-primary" onClick={() => onEdit(destination)} style={{ flex: 1 }}>
-                            ✏️ Modifier
+                    {/* Actions */}
+                    <div style={{ display: 'flex', gap: '8px', marginTop: '24px', paddingTop: '20px', borderTop: '1px solid var(--border-subtle)' }}>
+                        <button className="btn-primary" onClick={() => onEdit(destination)} style={{ flex: 1, justifyContent: 'center' }}>
+                            {t.edit}
                         </button>
                         <button className="btn-danger" onClick={() => onDelete(destination.id)}>
-                            🗑️ Supprimer
+                            {t.deleteBtn}
                         </button>
                     </div>
                 </div>
             </div>
+        </div>
+    );
+}
+
+function Label({ children }) {
+    return (
+        <p style={{
+            fontSize: '11px', fontWeight: 600,
+            color: 'var(--text-muted)',
+            textTransform: 'uppercase', letterSpacing: '0.06em',
+        }}>
+            {children}
+        </p>
+    );
+}
+
+function Field({ label, value }) {
+    return (
+        <div>
+            <Label>{label}</Label>
+            <p style={{ fontSize: '14px', color: 'var(--text-primary)', fontWeight: 500, marginTop: '4px' }}>
+                {value}
+            </p>
         </div>
     );
 }

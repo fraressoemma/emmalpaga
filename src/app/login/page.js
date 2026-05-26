@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
+import { useLanguage } from '@/context/LanguageContext';
 import { useRouter } from 'next/navigation';
 
 export default function LoginPage() {
@@ -12,6 +13,7 @@ export default function LoginPage() {
     const [loading, setLoading] = useState(false);
     const [success, setSuccess] = useState('');
     const { signIn, signUp } = useAuth();
+    const { lang, t, toggleLang } = useLanguage();
     const router = useRouter();
 
     const handleSubmit = async (e) => {
@@ -26,7 +28,7 @@ export default function LoginPage() {
                 router.push('/');
             } else {
                 await signUp(email, password);
-                setSuccess('Compte créé ! Vérifiez votre email pour confirmer votre inscription.');
+                setSuccess(t.accountCreated);
             }
         } catch (err) {
             setError(err.message);
@@ -44,8 +46,33 @@ export default function LoginPage() {
                 alignItems: 'center',
                 justifyContent: 'center',
                 padding: '20px',
+                position: 'relative',
             }}
         >
+            {/* Language toggle */}
+            <button
+                onClick={toggleLang}
+                title={lang === 'fr' ? 'Switch to English' : 'Passer en français'}
+                style={{
+                    position: 'absolute',
+                    top: '20px',
+                    right: '20px',
+                    background: 'rgba(255,255,255,0.1)',
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    cursor: 'pointer',
+                    padding: '5px 12px',
+                    borderRadius: '8px',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    color: 'rgba(255,255,255,0.7)',
+                    letterSpacing: '0.04em',
+                    transition: 'all 0.15s',
+                    zIndex: 10,
+                }}
+            >
+                {lang === 'fr' ? 'EN' : 'FR'}
+            </button>
+
             <div
                 className="animate-slideUp"
                 style={{
@@ -55,24 +82,11 @@ export default function LoginPage() {
             >
                 {/* Header */}
                 <div style={{ textAlign: 'center', marginBottom: '36px' }}>
-                    <div
-                        className="animate-float"
-                        style={{ fontSize: '56px', marginBottom: '16px' }}
-                    >
-                        🌍
-                    </div>
-                    <h1
-                        style={{
-                            fontFamily: "'Outfit', sans-serif",
-                            fontSize: '32px',
-                            fontWeight: 800,
-                            color: 'white',
-                            marginBottom: '8px',
-                            letterSpacing: '-0.03em',
-                        }}
-                    >
-                        My Travel List
-                    </h1>
+                    <img
+                        src="/wayki-logo.png"
+                        alt="Wayki"
+                        style={{ height: '64px', width: 'auto', marginBottom: '12px' }}
+                    />
                     <p
                         style={{
                             color: 'rgba(255,255,255,0.5)',
@@ -80,7 +94,7 @@ export default function LoginPage() {
                             fontWeight: 400,
                         }}
                     >
-                        Votre bucket list de voyages personnelle
+                        {t.tagline}
                     </p>
                 </div>
 
@@ -117,7 +131,7 @@ export default function LoginPage() {
                                 transition: 'all 0.2s ease',
                             }}
                         >
-                            Connexion
+                            {t.login}
                         </button>
                         <button
                             onClick={() => { setIsLogin(false); setError(''); setSuccess(''); }}
@@ -134,7 +148,7 @@ export default function LoginPage() {
                                 transition: 'all 0.2s ease',
                             }}
                         >
-                            Inscription
+                            {t.signup}
                         </button>
                     </div>
 
@@ -150,13 +164,13 @@ export default function LoginPage() {
                                     marginBottom: '6px',
                                 }}
                             >
-                                Email
+                                {t.email}
                             </label>
                             <input
                                 type="email"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
-                                placeholder="vous@exemple.com"
+                                placeholder={t.emailPlaceholder}
                                 required
                                 style={{
                                     width: '100%',
@@ -184,13 +198,13 @@ export default function LoginPage() {
                                     marginBottom: '6px',
                                 }}
                             >
-                                Mot de passe
+                                {t.password}
                             </label>
                             <input
                                 type="password"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
-                                placeholder="Min. 6 caractères"
+                                placeholder={t.passwordPlaceholder}
                                 required
                                 minLength={6}
                                 style={{
@@ -250,21 +264,21 @@ export default function LoginPage() {
                                 borderRadius: '12px',
                                 border: 'none',
                                 background: loading
-                                    ? 'rgba(99,102,241,0.5)'
-                                    : 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                                    ? 'rgba(196,112,74,0.5)'
+                                    : 'linear-gradient(135deg, #c4704a, #7a9e7e)',
                                 color: 'white',
                                 fontSize: '15px',
                                 fontWeight: 700,
                                 cursor: loading ? 'not-allowed' : 'pointer',
                                 transition: 'all 0.2s ease',
-                                boxShadow: '0 4px 15px rgba(99, 102, 241, 0.4)',
+                                boxShadow: '0 4px 15px rgba(196, 112, 74, 0.35)',
                             }}
                         >
                             {loading
-                                ? '⏳ Chargement...'
+                                ? t.loadingBtn
                                 : isLogin
-                                    ? '🚀 Se connecter'
-                                    : '✨ Créer mon compte'}
+                                    ? t.loginBtn
+                                    : t.signupBtn}
                         </button>
                     </form>
                 </div>
@@ -278,7 +292,7 @@ export default function LoginPage() {
                         color: 'rgba(255,255,255,0.3)',
                     }}
                 >
-                    Explorez le monde, une destination à la fois ✈️
+                    {t.footerTagline}
                 </p>
             </div>
         </div>

@@ -2,10 +2,21 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { useRouter } from 'next/navigation';
-import { db } from '@/lib/firebase';
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, query, where, setDoc } from 'firebase/firestore';
+import { useLanguage } from '@/context/LanguageContext';
+import {
+  getDestinations,
+  addDestination,
+  updateDestination,
+  deleteDestination,
+  getProfile,
+  updateProfile,
+  exportAllData,
+  getTrips,
+  addTrip,
+  deleteTrip,
+} from '@/lib/storage';
 import CategoryManager from '@/components/CategoryManager';
+import TripSelector from '@/components/TripSelector';
 import SearchBar from '@/components/SearchBar';
 import Filters from '@/components/Filters';
 import DestinationList from '@/components/DestinationList';
@@ -32,19 +43,19 @@ const MapComponent = nextDynamic(() => import('@/components/Map'), {
         fontSize: '14px',
       }}
     >
-      🗺️ Chargement de la carte...
+      🗺️ Loading map...
     </div>
   ),
 });
 
 export default function HomePage() {
-  const { user, loading: authLoading, signOut } = useAuth();
-  const router = useRouter();
+  const { user, signOut } = useAuth();
+  const { lang, t, toggleLang } = useLanguage();
 
   const DEFAULT_CATEGORIES = [
-    { key: 'dream', emoji: '🌟', label: 'Rêve', color: '#FF3366' },
-    { key: 'desire', emoji: '✈️', label: 'Envie', color: '#FF9900' },
-    { key: 'curiosity', emoji: '🔍', label: 'Curiosité', color: '#00C2B2' },
+    { key: 'dream', emoji: '🌟', label: t.catDream, color: '#c4704a' },
+    { key: 'desire', emoji: '🤩', label: t.catDesire, color: '#7a9e7e' },
+    { key: 'curiosity', emoji: '🔍', label: t.catCuriosity, color: '#9b7ec8' },
   ];
 
   // State
@@ -61,73 +72,54 @@ export default function HomePage() {
   const [editingDestination, setEditingDestination] = useState(null);
   const [sharingEnabled, setSharingEnabled] = useState(false);
   const [mobileView, setMobileView] = useState('list'); // 'list' or 'map'
+  const [trips, setTrips] = useState([]);
+  const [selectedTripId, setSelectedTripId] = useState(null);
   const allCategories = [...DEFAULT_CATEGORIES, ...customCategories];
   const [sidebarVisible, setSidebarVisible] = useState(true);
   const [sidebarTab, setSidebarTab] = useState('destinations'); // 'destinations' | 'itinerary'
+  const [showAccount, setShowAccount] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
 
-  // No redirect to login needed anymore
-
-  // Fetch destinations
+  // Load destinations from Firestore
   const fetchDestinations = useCallback(async () => {
-    if (!user) return;
-
-    try {
-      const destRef = collection(db, 'destinations');
-      const q = query(destRef, where('user_id', '==', user.id));
-      const querySnapshot = await getDocs(q);
-      const data = querySnapshot.docs
-        .map(doc => ({ id: doc.id, ...doc.data() }))
-        .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
-      setDestinations(data);
-    } catch (error) {
-      console.error('Error fetching destinations:', error);
-    }
+    const data = await getDestinations();
+    setDestinations(data);
     setLoading(false);
-  }, [user]);
+  }, []);
 
   useEffect(() => {
     fetchDestinations();
   }, [fetchDestinations]);
 
-  // Fetch sharing status + custom categories
+  // Load trips
   useEffect(() => {
-    if (!user) return;
+    getTrips().then(setTrips);
+  }, []);
 
-    async function fetchProfile() {
-      try {
-        const q = query(collection(db, 'profiles'), where('id', '==', user.id));
-        const querySnapshot = await getDocs(q);
-        if (!querySnapshot.empty) {
-          const data = querySnapshot.docs[0].data();
-          setSharingEnabled(data.sharing_enabled);
-          if (data.custom_categories) setCustomCategories(data.custom_categories);
-        }
-      } catch (error) {
-        console.error('Error fetching profile:', error);
+  // Load profile (sharing status + custom categories)
+  useEffect(() => {
+    getProfile().then((profile) => {
+      setSharingEnabled(profile.sharing_enabled || false);
+      if (profile.custom_categories) {
+        setCustomCategories(profile.custom_categories);
       }
-    }
-
-    fetchProfile();
-  }, [user]);
+    });
+  }, []);
 
   // Filter destinations
   const filteredDestinations = useMemo(() => {
     return destinations.filter((dest) => {
+      // Trip filter
+      if (selectedTripId && dest.tripId !== selectedTripId) return false;
       // Search filter
-      if (search && !dest.name.toLowerCase().includes(search.toLowerCase())) {
-        return false;
-      }
+      if (search && !dest.name.toLowerCase().includes(search.toLowerCase())) return false;
       // Category filter
-      if (selectedCategories.length > 0 && !selectedCategories.includes(dest.category)) {
-        return false;
-      }
+      if (selectedCategories.length > 0 && !selectedCategories.includes(dest.category)) return false;
       // Status filter
-      if (selectedStatuses.length > 0 && !selectedStatuses.includes(dest.status)) {
-        return false;
-      }
+      if (selectedStatuses.length > 0 && !selectedStatuses.includes(dest.status)) return false;
       return true;
     });
-  }, [destinations, search, selectedCategories, selectedStatuses]);
+  }, [destinations, search, selectedCategories, selectedStatuses, selectedTripId]);
 
   // Handlers
   const handleCategoryToggle = (cat) => {
@@ -159,115 +151,81 @@ export default function HomePage() {
   };
 
   const handleSave = async (formData) => {
-    try {
-      if (editingDestination) {
-        // Update
-        const destRef = doc(db, 'destinations', editingDestination.id);
-        await updateDoc(destRef, {
-          ...formData,
-          updated_at: new Date().toISOString(),
-        });
-
-        await fetchDestinations();
-        setShowForm(false);
-        setEditingDestination(null);
-      } else {
-        // Insert
-        await addDoc(collection(db, 'destinations'), {
-          ...formData,
-          user_id: user.id,
-          is_public: sharingEnabled,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        });
-
-        await fetchDestinations();
-        setShowForm(false);
-      }
-    } catch (error) {
-      console.error('Error saving destination:', error);
-      alert('Erreur lors de la sauvegarde');
+    if (editingDestination) {
+      await updateDestination(editingDestination.id, formData);
+    } else {
+      await addDestination(formData);
     }
+    fetchDestinations();
+    setShowForm(false);
+    setEditingDestination(null);
   };
 
   const handleDelete = async (id) => {
-    if (!confirm('Supprimer cette destination ?')) return;
+    if (!confirm(t.confirmDelete)) return;
 
-    try {
-      await deleteDoc(doc(db, 'destinations', id));
-      await fetchDestinations();
-      setShowModal(false);
-      setSelectedDestination(null);
-    } catch (error) {
-      console.error('Error deleting destination:', error);
-      alert('Erreur lors de la suppression');
-    }
+    await deleteDestination(id);
+    fetchDestinations();
+    setShowModal(false);
+    setSelectedDestination(null);
   };
 
   const handleToggleShare = async () => {
     const newValue = !sharingEnabled;
+    await updateProfile({ sharing_enabled: newValue });
+    setSharingEnabled(newValue);
 
-    try {
-      // Upsert profile
-      const profileRef = doc(db, 'profiles', user.id);
-      await setDoc(profileRef, {
-        id: user.id,
-        sharing_enabled: newValue,
-      }, { merge: true });
-
-      // Update all destinations public status
-      // In Firestore, we have to fetch them then update each one
-      const q = query(collection(db, 'destinations'), where('user_id', '==', user.id));
-      const querySnapshot = await getDocs(q);
-
-      const updatePromises = querySnapshot.docs.map(document =>
-        updateDoc(doc(db, 'destinations', document.id), { is_public: newValue })
-      );
-      await Promise.all(updatePromises);
-
-      setSharingEnabled(newValue);
-
-      if (newValue) {
-        const shareUrl = `${window.location.origin}/share/${user.id}`;
-        try {
-          await navigator.clipboard.writeText(shareUrl);
-          alert(`Lien copié !\n${shareUrl}`);
-        } catch {
-          alert(`Lien de partage :\n${shareUrl}`);
-        }
+    if (newValue) {
+      const shareUrl = `${window.location.origin}/share/${user.id}`;
+      try {
+        navigator.clipboard.writeText(shareUrl);
+        alert(`${t.linkCopied}\n${shareUrl}`);
+      } catch {
+        alert(`${t.shareLink}\n${shareUrl}`);
       }
-    } catch (error) {
-      console.error('Error updating sharing status:', error);
-      alert('Erreur lors de la mise à jour du partage');
     }
   };
 
-  const saveCustomCategories = async (updated) => {
-    try {
-      const profileRef = doc(db, 'profiles', user.id);
-      await setDoc(profileRef, { id: user.id, custom_categories: updated }, { merge: true });
-    } catch (error) {
-      console.error('Error saving categories:', error);
-    }
+  const handleAddTrip = async (name, color) => {
+    const trip = await addTrip(name, color);
+    setTrips((prev) => [...prev, trip]);
+    setSelectedTripId(trip.id);
   };
 
-  const handleAddCategory = (cat) => {
+  const handleDeleteTrip = async (id) => {
+    if (!confirm(t.confirmDeleteTrip)) return;
+    await deleteTrip(id);
+    setTrips((prev) => prev.filter((t) => t.id !== id));
+    if (selectedTripId === id) setSelectedTripId(null);
+  };
+
+  const handleAddCategory = async (cat) => {
     const updated = [...customCategories, cat];
     setCustomCategories(updated);
-    saveCustomCategories(updated);
+    await updateProfile({ custom_categories: updated });
   };
 
-  const handleDeleteCategory = (key) => {
+  const handleDeleteCategory = async (key) => {
     const updated = customCategories.filter(c => c.key !== key);
     setCustomCategories(updated);
-    saveCustomCategories(updated);
+    await updateProfile({ custom_categories: updated });
   };
 
   const handleExportPdf = () => {
     exportToPdf(filteredDestinations);
   };
 
-  // No loading state needed since user is provided synchronously
+  const handleExportJSON = async () => {
+    const data = await exportAllData();
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `backup-${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   if (!user) {
     return null;
   }
@@ -301,7 +259,7 @@ export default function HomePage() {
             cursor: 'pointer',
           }}
         >
-          📋 Liste
+          📋 {t.list}
         </button>
         <button
           onClick={() => setMobileView('map')}
@@ -317,7 +275,7 @@ export default function HomePage() {
             cursor: 'pointer',
           }}
         >
-          🗺️ Carte
+          🗺️ {t.map}
         </button>
       </div>
 
@@ -351,7 +309,7 @@ export default function HomePage() {
           <button
             className="desktop-only"
             onClick={() => setSidebarVisible(v => !v)}
-            title={sidebarVisible ? 'Masquer la liste' : 'Afficher la liste'}
+            title={sidebarVisible ? t.hideSidebar : t.showSidebar}
             style={{
               position: 'absolute',
               top: '50%',
@@ -379,46 +337,12 @@ export default function HomePage() {
             {sidebarVisible ? '›' : '‹'}
           </button>
 
-          {/* Stats overlay */}
+          {/* Wayki logo overlay */}
           <div
-            className="glass desktop-only"
-            style={{
-              position: 'absolute',
-              top: '20px',
-              left: '20px',
-              padding: '12px 18px',
-              borderRadius: 'var(--radius-lg)',
-              display: 'flex',
-              gap: '16px',
-              zIndex: 500,
-            }}
+            className="desktop-only"
+            style={{ position: 'absolute', top: '0px', left: '8px', zIndex: 500 }}
           >
-            <div style={{ textAlign: 'center' }}>
-              <p style={{ fontSize: '20px', fontWeight: 800, color: 'var(--text-primary)' }}>
-                {destinations.length}
-              </p>
-              <p style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                Total
-              </p>
-            </div>
-            <div style={{ width: '1px', background: 'rgba(0,0,0,0.1)' }} />
-            <div style={{ textAlign: 'center' }}>
-              <p style={{ fontSize: '20px', fontWeight: 800, color: 'var(--color-done)' }}>
-                {destinations.filter((d) => d.status === 'done').length}
-              </p>
-              <p style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                Faits
-              </p>
-            </div>
-            <div style={{ width: '1px', background: 'rgba(0,0,0,0.1)' }} />
-            <div style={{ textAlign: 'center' }}>
-              <p style={{ fontSize: '20px', fontWeight: 800, color: 'var(--color-dream)' }}>
-                {destinations.filter((d) => d.category === 'dream').length}
-              </p>
-              <p style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                Rêves
-              </p>
-            </div>
+            <img src="/wayki-logo.png" alt="Wayki" style={{ height: '120px', width: 'auto' }} />
           </div>
         </div>
 
@@ -437,65 +361,115 @@ export default function HomePage() {
             flexShrink: 0,
           }}
         >
-          {/* Sidebar logo */}
-          <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', flexShrink: 0 }}>
-            <svg width="28" height="34" viewBox="0 0 40 46" style={{ flexShrink: 0, overflow: 'visible' }}>
-              <circle cx="10" cy="15" r="9" fill="#FF3366" />
-              <circle cx="20" cy="11" r="10" fill="#FF9900" />
-              <circle cx="30" cy="15" r="9" fill="#00C2B2" />
-              <ellipse cx="7" cy="23" rx="3.5" ry="5.5" fill="#F5CF80" transform="rotate(-18 7 23)" />
-              <ellipse cx="33" cy="23" rx="3.5" ry="5.5" fill="#F5CF80" transform="rotate(18 33 23)" />
-              <ellipse cx="7" cy="23" rx="1.8" ry="3.2" fill="#FFBCBC" transform="rotate(-18 7 23)" />
-              <ellipse cx="33" cy="23" rx="1.8" ry="3.2" fill="#FFBCBC" transform="rotate(18 33 23)" />
-              <ellipse cx="20" cy="27" rx="13.5" ry="12" fill="#F5CF80" />
-              <circle cx="14" cy="25.5" r="3.8" fill="#1F2937" />
-              <circle cx="26" cy="25.5" r="3.8" fill="#1F2937" />
-              <circle cx="15.4" cy="24.1" r="1.4" fill="white" />
-              <circle cx="27.4" cy="24.1" r="1.4" fill="white" />
-              <ellipse cx="20" cy="33" rx="6" ry="4.2" fill="#E8AE5A" />
-              <ellipse cx="17.5" cy="33.8" rx="1.2" ry="0.9" fill="#B87840" />
-              <ellipse cx="22.5" cy="33.8" rx="1.2" ry="0.9" fill="#B87840" />
-              <rect x="15" y="37" width="10" height="7" rx="5" fill="#F5CF80" />
-            </svg>
-            <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: '18px', fontWeight: 900, background: 'linear-gradient(135deg, #FF3366 0%, #FF9900 55%, #00C2B2 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', letterSpacing: '-0.03em' }}>
-              EmmAlpaga
-            </span>
+          {/* Compte & notifications */}
+          <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, position: 'relative' }}>
+            {/* Avatar + nom */}
+            <button
+              onClick={() => { setShowAccount(v => !v); setShowNotifications(false); }}
+              style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 6px', borderRadius: 'var(--radius-md)', transition: 'background 0.15s' }}
+              onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-card-hover)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'none'}
+            >
+              <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'var(--accent-light)', border: '1px solid var(--accent-border)', color: 'var(--accent)', fontSize: '12px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                {user?.email?.charAt(0).toUpperCase() || 'U'}
+              </div>
+              <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)', maxWidth: '100px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {user?.email?.split('@')[0]}
+              </span>
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ flexShrink: 0, opacity: 0.5 }}>
+                <path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </button>
+
+            {/* Actions droite : langue + cloche */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              {/* Toggle langue */}
+              <button
+                onClick={toggleLang}
+                title={lang === 'fr' ? 'Switch to English' : 'Passer en français'}
+                style={{ background: 'none', border: '1px solid var(--border-light)', cursor: 'pointer', padding: '3px 7px', borderRadius: 'var(--radius-sm)', fontSize: '11px', fontWeight: 700, color: 'var(--text-secondary)', letterSpacing: '0.04em', transition: 'all 0.15s' }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent-border)'; e.currentTarget.style.color = 'var(--accent)'; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-light)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
+              >
+                {lang === 'fr' ? 'EN' : 'FR'}
+              </button>
+
+              {/* Cloche notifications */}
+              <button
+                onClick={() => { setShowNotifications(v => !v); setShowAccount(false); }}
+                style={{ position: 'relative', background: 'none', border: 'none', cursor: 'pointer', padding: '6px', borderRadius: 'var(--radius-md)', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', transition: 'background 0.15s' }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-card-hover)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
+                title={t.notifications}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                  <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+                </svg>
+              </button>
+            </div>
+
+            {/* Dropdown compte */}
+            {showAccount && (
+              <div className="animate-slideUp" style={{ position: 'absolute', top: '52px', left: '12px', right: '12px', background: 'var(--bg-elevated)', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-xl)', padding: '6px', zIndex: 900 }}>
+                <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--border-subtle)', marginBottom: '4px' }}>
+                  <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '2px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.myAccount}</p>
+                  <p style={{ fontSize: '13px', color: 'var(--text-primary)', fontWeight: 500 }}>{user?.email}</p>
+                </div>
+                <AccountMenuBtn onClick={() => setShowAccount(false)}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px' }}><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+                  {t.profile}
+                </AccountMenuBtn>
+                <AccountMenuBtn onClick={() => setShowAccount(false)}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px' }}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                  {t.settings}
+                </AccountMenuBtn>
+                <div style={{ borderTop: '1px solid var(--border-subtle)', marginTop: '4px', paddingTop: '4px' }}>
+                  <AccountMenuBtn onClick={() => { signOut(); setShowAccount(false); }} danger>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '8px' }}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                    {t.logout}
+                  </AccountMenuBtn>
+                </div>
+              </div>
+            )}
+
+            {/* Dropdown notifications */}
+            {showNotifications && (
+              <div className="animate-slideUp" style={{ position: 'absolute', top: '52px', left: '12px', right: '12px', background: 'var(--bg-elevated)', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-xl)', padding: '6px', zIndex: 900 }}>
+                <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--border-subtle)', marginBottom: '4px' }}>
+                  <p style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.notifications}</p>
+                </div>
+                <div style={{ padding: '20px 12px', textAlign: 'center' }}>
+                  <p style={{ fontSize: '24px', marginBottom: '8px' }}>🔔</p>
+                  <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{t.noNotifications}</p>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Sidebar header */}
           <div style={{ padding: '16px 20px 0', flexShrink: 0 }}>
             {/* Tabs */}
-            <div
-              style={{
-                display: 'flex',
-                background: 'var(--bg-card)',
-                borderRadius: '12px',
-                padding: '4px',
-                marginBottom: '16px',
-                gap: '2px',
-              }}
-            >
+            <div style={{ display: 'flex', gap: '2px', marginBottom: '20px', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '0' }}>
               {[
-                { key: 'destinations', label: '📋 Liste' },
-                { key: 'itinerary', label: '🗺️ Distances' },
+                { key: 'destinations', label: t.tabDestinations },
+                { key: 'itinerary', label: t.tabDistances },
               ].map(({ key, label }) => (
                 <button
                   key={key}
                   onClick={() => setSidebarTab(key)}
                   style={{
-                    flex: 1,
-                    padding: '7px 10px',
-                    borderRadius: '9px',
+                    padding: '8px 14px',
                     border: 'none',
-                    background: sidebarTab === key
-                      ? 'white'
-                      : 'transparent',
+                    background: 'transparent',
                     color: sidebarTab === key ? 'var(--text-primary)' : 'var(--text-muted)',
                     fontSize: '13px',
-                    fontWeight: 700,
+                    fontWeight: sidebarTab === key ? 600 : 400,
                     cursor: 'pointer',
-                    transition: 'all 0.2s',
-                    boxShadow: sidebarTab === key ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
+                    transition: 'all 0.15s',
+                    borderBottom: `2px solid ${sidebarTab === key ? 'var(--accent)' : 'transparent'}`,
+                    marginBottom: '-1px',
+                    letterSpacing: '-0.01em',
                   }}
                 >
                   {label}
@@ -505,25 +479,21 @@ export default function HomePage() {
 
             {sidebarTab === 'destinations' && (
               <>
-                <div style={{ marginBottom: '12px' }}>
-                  <h2
-                    style={{
-                      fontFamily: "'Outfit', sans-serif",
-                      fontSize: '18px',
-                      fontWeight: 800,
-                      color: 'var(--text-primary)',
-                      marginBottom: '2px',
-                    }}
-                  >
-                    Mes destinations
+                <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+                  <h2 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
+                    {t.destinations}
                   </h2>
-                  <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-                    {filteredDestinations.length} destination{filteredDestinations.length !== 1 ? 's' : ''}
-                    {search || selectedCategories.length > 0 || selectedStatuses.length > 0
-                      ? ` (filtrée${filteredDestinations.length !== 1 ? 's' : ''})`
-                      : ''}
-                  </p>
+                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                    {t.results(filteredDestinations.length)}
+                  </span>
                 </div>
+                <TripSelector
+                  trips={trips}
+                  selectedTripId={selectedTripId}
+                  onSelectTrip={setSelectedTripId}
+                  onAddTrip={handleAddTrip}
+                  onDeleteTrip={handleDeleteTrip}
+                />
                 <SearchBar value={search} onChange={setSearch} />
                 <Filters
                   categories={allCategories}
@@ -537,11 +507,11 @@ export default function HomePage() {
             )}
 
             {sidebarTab === 'itinerary' && (
-              <div style={{ marginBottom: '12px' }}>
-                <h2 style={{ fontFamily: "'Outfit', sans-serif", fontSize: '18px', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '2px' }}>
-                  Distances
+              <div style={{ marginBottom: '16px' }}>
+                <h2 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.02em', marginBottom: '2px' }}>
+                  {t.distances}
                 </h2>
-                <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Durées depuis votre position</p>
+                <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{t.distancesSubtitle}</p>
               </div>
             )}
           </div>
@@ -552,7 +522,7 @@ export default function HomePage() {
               loading ? (
                 <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
                   <p className="animate-float" style={{ fontSize: '32px' }}>🗺️</p>
-                  <p style={{ marginTop: '8px' }}>Chargement...</p>
+                  <p style={{ marginTop: '8px' }}>{t.loading}</p>
                 </div>
               ) : (
                 <div style={{ padding: '0 20px' }}>
@@ -571,29 +541,29 @@ export default function HomePage() {
             )}
           </div>
 
-          {/* Sidebar footer - user actions */}
-          <div style={{ borderTop: '1px solid var(--border-light)', padding: '12px 20px', flexShrink: 0 }}>
-            <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
-              <button
-                onClick={handleExportPdf}
-                style={{ flex: 1, padding: '8px 10px', borderRadius: '10px', border: '1px solid var(--border-light)', background: 'var(--bg-card)', color: 'var(--text-secondary)', fontSize: '12px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px' }}
-              >
-                📄 PDF
+          {/* Sidebar footer */}
+          <div style={{ borderTop: '1px solid var(--border-subtle)', padding: '12px 20px', flexShrink: 0 }}>
+            <div style={{ display: 'flex', gap: '6px', marginBottom: '10px' }}>
+              <button onClick={handleExportPdf} className="btn-secondary" style={{ flex: 1, justifyContent: 'center', fontSize: '12px', padding: '7px 10px' }}>
+                {t.pdf}
+              </button>
+              <button onClick={handleExportJSON} className="btn-secondary" style={{ flex: 1, justifyContent: 'center', fontSize: '12px', padding: '7px 10px' }}>
+                {t.backup}
               </button>
               <button
                 onClick={handleToggleShare}
-                style={{ flex: 1, padding: '8px 10px', borderRadius: '10px', border: `1px solid ${sharingEnabled ? 'rgba(16,185,129,0.3)' : 'var(--border-light)'}`, background: sharingEnabled ? 'rgba(16,185,129,0.1)' : 'var(--bg-card)', color: sharingEnabled ? '#059669' : 'var(--text-secondary)', fontSize: '12px', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px' }}
+                style={{
+                  flex: 1, padding: '7px 10px',
+                  borderRadius: 'var(--radius-md)',
+                  border: `1px solid ${sharingEnabled ? 'var(--accent-border)' : 'var(--border-light)'}`,
+                  background: sharingEnabled ? 'var(--accent-light)' : 'transparent',
+                  color: sharingEnabled ? 'var(--accent)' : 'var(--text-secondary)',
+                  fontSize: '12px', fontWeight: 500, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  transition: 'all 0.15s',
+                }}
               >
-                {sharingEnabled ? '🔗 Actif' : '🔒 Partager'}
-              </button>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: '12px', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '180px' }}>{user?.email}</span>
-              <button
-                onClick={signOut}
-                style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '12px', fontWeight: 600, cursor: 'pointer', padding: '4px 8px', borderRadius: '6px' }}
-              >
-                ⬅️ Déconnexion
+                {sharingEnabled ? t.linkActive : t.share}
               </button>
             </div>
           </div>
@@ -622,6 +592,8 @@ export default function HomePage() {
             setEditingDestination(null);
           }}
           categories={allCategories}
+          trips={trips}
+          defaultTripId={selectedTripId}
         />
       )}
 
@@ -637,5 +609,33 @@ export default function HomePage() {
 
       <FloatingAssistant />
     </div>
+  );
+}
+
+function AccountMenuBtn({ children, onClick, danger }) {
+  const [hover, setHover] = useState(false);
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        width: '100%',
+        textAlign: 'left',
+        padding: '7px 12px',
+        background: hover ? 'var(--bg-card-hover)' : 'none',
+        border: 'none',
+        fontSize: '13px',
+        fontWeight: 500,
+        cursor: 'pointer',
+        borderRadius: 'var(--radius-md)',
+        color: danger ? '#f87171' : 'var(--text-secondary)',
+        transition: 'all 0.15s',
+        display: 'flex',
+        alignItems: 'center',
+      }}
+    >
+      {children}
+    </button>
   );
 }

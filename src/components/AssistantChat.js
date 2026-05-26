@@ -1,21 +1,6 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
-
-const SYSTEM_PROMPT = `Tu es un assistant spécialisé dans la planification d'itinéraires de voyage et de visites. Tu aides les utilisateurs à organiser leur parcours de manière optimale.
-
-Quand tu planifies un itinéraire, tu DOIS inclure un bloc JSON dans ta réponse en respectant EXACTEMENT ce format :
-<itinerary>
-{
-  "steps": [
-    {"name": "Nom du lieu", "detail": "Description courte, conseil pratique", "duration": "Xh", "type": "musée|restaurant|monument|parc|shopping|transport"},
-    ...
-  ],
-  "total_duration": "Xh total",
-  "mode": "à pied|voiture|transports en commun"
-}
-</itinerary>
-
-Règles : optimise l'ordre géographiquement, inclus des conseils pratiques, tiens compte de la position GPS si fournie. Si tu réponds à une question sans planifier, ne mets PAS de bloc <itinerary>.`;
+import { useLanguage } from '@/context/LanguageContext';
 
 const TYPE_EMOJI = { musée: '🏛', restaurant: '🍽', monument: '🗿', parc: '🌿', shopping: '🛍', transport: '🚇' };
 
@@ -30,10 +15,16 @@ function formatTime() {
 }
 
 export default function AssistantChat() {
+    const { lang, t } = useLanguage();
+
+    const SYSTEM_PROMPT = lang === 'fr'
+        ? `Tu es un assistant spécialisé dans la planification d'itinéraires de voyage et de visites. Tu aides les utilisateurs à organiser leur parcours de manière optimale.\n\nQuand tu planifies un itinéraire, tu DOIS inclure un bloc JSON dans ta réponse en respectant EXACTEMENT ce format :\n<itinerary>\n{\n  "steps": [\n    {"name": "Nom du lieu", "detail": "Description courte, conseil pratique", "duration": "Xh", "type": "musée|restaurant|monument|parc|shopping|transport"},\n    ...\n  ],\n  "total_duration": "Xh total",\n  "mode": "à pied|voiture|transports en commun"\n}\n</itinerary>\n\nRègles : optimise l'ordre géographiquement, inclus des conseils pratiques, tiens compte de la position GPS si fournie. Si tu réponds à une question sans planifier, ne mets PAS de bloc <itinerary>.`
+        : `You are an assistant specialized in planning travel itineraries and visits. You help users organize their route optimally.\n\nWhen planning an itinerary, you MUST include a JSON block in your response following EXACTLY this format:\n<itinerary>\n{\n  "steps": [\n    {"name": "Place name", "detail": "Short description, practical tip", "duration": "Xh", "type": "musée|restaurant|monument|parc|shopping|transport"},\n    ...\n  ],\n  "total_duration": "Xh total",\n  "mode": "walking|driving|public transit"\n}\n</itinerary>\n\nRules: optimize the order geographically, include practical tips, consider the GPS position if provided. If answering a question without planning, do NOT include a <itinerary> block.`;
+
     const [apiKey, setApiKey] = useState('');
     const [apiStatus, setApiStatus] = useState(null); // null | 'ok' | 'err'
     const [messages, setMessages] = useState([
-        { role: 'assistant', text: 'Bonjour ! Je suis votre assistant itinéraire 👋\n\nDites-moi où vous souhaitez aller et combien de temps vous avez — je planifie votre parcours optimal !', time: formatTime() }
+        { role: 'assistant', text: t.assistantGreeting, time: formatTime() }
     ]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
@@ -63,7 +54,7 @@ export default function AssistantChat() {
         if (!text || loading) return;
 
         if (!apiKey || !apiKey.startsWith('AIza')) {
-            setMessages(prev => [...prev, { role: 'assistant', text: 'Merci de coller ta clé API Google (Gemini) dans le champ en haut !', time: formatTime() }]);
+            setMessages(prev => [...prev, { role: 'assistant', text: t.pasteApiKey, time: formatTime() }]);
             return;
         }
 
@@ -96,18 +87,18 @@ export default function AssistantChat() {
             );
             const data = await res.json();
             if (data.error) {
-                setMessages(prev => [...prev, { role: 'assistant', text: `Erreur API : ${data.error.message}`, time: formatTime() }]);
+                setMessages(prev => [...prev, { role: 'assistant', text: `${t.apiError} : ${data.error.message}`, time: formatTime() }]);
                 setLoading(false);
                 return;
             }
-            const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Aucune réponse reçue.';
+            const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || t.noResponse;
             const clean = reply.replace(/<itinerary>[\s\S]*?<\/itinerary>/g, '').trim();
             historyRef.current.push({ role: 'assistant', content: reply });
             if (clean) setMessages(prev => [...prev, { role: 'assistant', text: clean, time: formatTime() }]);
             const parsed = parseItinerary(reply);
             if (parsed) { setItinerary(parsed); setShowItinerary(true); }
         } catch (e) {
-            setMessages(prev => [...prev, { role: 'assistant', text: `Erreur : ${e.message}`, time: formatTime() }]);
+            setMessages(prev => [...prev, { role: 'assistant', text: `${t.error} : ${e.message}`, time: formatTime() }]);
         }
         setLoading(false);
     };
@@ -125,7 +116,7 @@ export default function AssistantChat() {
         <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
             {/* API key bar */}
             <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border-light)', display: 'flex', alignItems: 'center', gap: '8px', background: '#fafafa', flexShrink: 0 }}>
-                <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 700, whiteSpace: 'nowrap' }}>Clé Gemini</span>
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 700, whiteSpace: 'nowrap' }}>{t.geminiKey}</span>
                 <input
                     type="password"
                     value={apiKey}
@@ -184,7 +175,7 @@ export default function AssistantChat() {
                         onClick={() => setShowItinerary(v => !v)}
                         style={{ width: '100%', padding: '9px 16px', background: '#fafafa', border: 'none', borderBottom: showItinerary ? '1px solid var(--border-light)' : 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '12px', fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'inherit' }}
                     >
-                        <span>📋 Itinéraire · {itinerary.steps.length} étape{itinerary.steps.length > 1 ? 's' : ''}</span>
+                        <span>{t.itinerarySteps(itinerary.steps.length)}</span>
                         <span style={{ color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                             <span style={{ fontSize: '11px', background: '#eee', padding: '1px 7px', borderRadius: '20px' }}>{itinerary.total_duration}</span>
                             {showItinerary ? '▲' : '▼'}
@@ -215,7 +206,7 @@ export default function AssistantChat() {
                     value={input}
                     onChange={e => setInput(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
-                    placeholder="Ex: Je veux visiter 3 endroits en 2h..."
+                    placeholder={t.chatPlaceholder}
                     rows={1}
                     style={{ flex: 1, border: '1px solid var(--border-light)', borderRadius: '16px', padding: '8px 12px', fontSize: '13px', fontFamily: 'inherit', outline: 'none', resize: 'none', minHeight: '36px', maxHeight: '80px', lineHeight: 1.4, background: 'white' }}
                 />
@@ -239,10 +230,10 @@ export default function AssistantChat() {
             >
                 <div style={{ width: '8px', height: '8px', borderRadius: '50%', flexShrink: 0, background: gpsStatus === 'active' ? '#22c55e' : gpsStatus === 'denied' ? '#ef4444' : '#ccc' }} />
                 <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {gpsStatus === 'idle' && 'Partager ma position GPS pour personnaliser'}
-                    {gpsStatus === 'loading' && 'Localisation en cours...'}
-                    {gpsStatus === 'active' && `GPS actif · ${userLocation?.lat.toFixed(3)}, ${userLocation?.lng.toFixed(3)}`}
-                    {gpsStatus === 'denied' && 'Permission refusée — décris ta position dans le chat'}
+                    {gpsStatus === 'idle' && t.gpsShareLabel}
+                    {gpsStatus === 'loading' && t.gpsLocating}
+                    {gpsStatus === 'active' && `${t.gpsActive} · ${userLocation?.lat.toFixed(3)}, ${userLocation?.lng.toFixed(3)}`}
+                    {gpsStatus === 'denied' && t.gpsDenied}
                 </span>
             </button>
 

@@ -2,14 +2,17 @@
 
 import { useState, useEffect } from 'react';
 import { geocode } from '@/lib/geocode';
+import { useLanguage } from '@/context/LanguageContext';
 
-const STATUSES = [
-    { key: 'todo', emoji: '📌', label: 'À faire' },
-    { key: 'in_progress', emoji: '🚀', label: 'En cours' },
-    { key: 'done', emoji: '✅', label: 'Fait' },
-];
+export default function DestinationForm({ destination, onSave, onCancel, categories = [], trips = [], defaultTripId = null }) {
+    const { t } = useLanguage();
 
-export default function DestinationForm({ destination, onSave, onCancel, categories = [] }) {
+    const STATUSES = [
+        { key: 'todo', emoji: '📌', label: t.statusTodo },
+        { key: 'in_progress', emoji: '🚀', label: t.statusInProgress },
+        { key: 'done', emoji: '✅', label: t.statusDone },
+    ];
+
     const [form, setForm] = useState({
         name: '',
         image_url: '',
@@ -20,6 +23,7 @@ export default function DestinationForm({ destination, onSave, onCancel, categor
         notes: '',
         lat: null,
         lng: null,
+        tripId: defaultTripId || '',
     });
     const [companionInput, setCompanionInput] = useState('');
     const [geocoding, setGeocoding] = useState(false);
@@ -37,6 +41,7 @@ export default function DestinationForm({ destination, onSave, onCancel, categor
                 notes: destination.notes || '',
                 lat: destination.lat || null,
                 lng: destination.lng || null,
+                tripId: destination.tripId || defaultTripId || '',
             });
         }
     }, [destination]);
@@ -150,7 +155,7 @@ export default function DestinationForm({ destination, onSave, onCancel, categor
                             color: 'var(--text-primary)',
                         }}
                     >
-                        {destination ? '✏️ Modifier' : '✨ Nouvelle destination'}
+                        {destination ? t.editTitle : t.newDestTitle}
                     </h2>
                     <button
                         onClick={onCancel}
@@ -172,14 +177,14 @@ export default function DestinationForm({ destination, onSave, onCancel, categor
                     {/* Name */}
                     <div style={{ marginBottom: '18px' }}>
                         <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
-                            Destination *
+                            {t.destinationLabel}
                         </label>
                         <input
                             className="input-field"
                             type="text"
                             value={form.name}
                             onChange={(e) => updateField('name', e.target.value)}
-                            placeholder="Ex: Kyoto, Japon"
+                            placeholder={t.destinationPlaceholder}
                             required
                         />
                     </div>
@@ -187,7 +192,7 @@ export default function DestinationForm({ destination, onSave, onCancel, categor
                     {/* Image URL */}
                     <div style={{ marginBottom: '18px' }}>
                         <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
-                            Photo (URL)
+                            {t.photoUrl}
                         </label>
                         <input
                             className="input-field"
@@ -213,7 +218,7 @@ export default function DestinationForm({ destination, onSave, onCancel, categor
                     {/* Category */}
                     <div style={{ marginBottom: '18px' }}>
                         <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '8px' }}>
-                            Niveau d&apos;envie
+                            {t.desireLevel}
                         </label>
                         <div style={radioGroupStyle}>
                             {categories.map((cat) => (
@@ -232,7 +237,7 @@ export default function DestinationForm({ destination, onSave, onCancel, categor
                     {/* Status */}
                     <div style={{ marginBottom: '18px' }}>
                         <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '8px' }}>
-                            Statut
+                            {t.status}
                         </label>
                         <div style={radioGroupStyle}>
                             {STATUSES.map((st) => (
@@ -254,21 +259,21 @@ export default function DestinationForm({ destination, onSave, onCancel, categor
                     {/* Budget */}
                     <div style={{ marginBottom: '18px' }}>
                         <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
-                            💰 Budget estimé
+                            {t.estimatedBudgetLabel}
                         </label>
                         <input
                             className="input-field"
                             type="text"
                             value={form.budget}
                             onChange={(e) => updateField('budget', e.target.value)}
-                            placeholder="Ex: 2 000€ – 3 000€"
+                            placeholder={t.budgetPlaceholder}
                         />
                     </div>
 
                     {/* Companions */}
                     <div style={{ marginBottom: '18px' }}>
                         <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
-                            👥 Avec qui
+                            {t.withWhoLabel}
                         </label>
                         <div style={{ display: 'flex', gap: '8px' }}>
                             <input
@@ -277,7 +282,7 @@ export default function DestinationForm({ destination, onSave, onCancel, categor
                                 value={companionInput}
                                 onChange={(e) => setCompanionInput(e.target.value)}
                                 onKeyDown={handleCompanionKeyDown}
-                                placeholder="Tapez un nom + Entrée"
+                                placeholder={t.companionPlaceholder}
                                 style={{ flex: 1 }}
                             />
                             <button
@@ -301,16 +306,44 @@ export default function DestinationForm({ destination, onSave, onCancel, categor
                         )}
                     </div>
 
+                    {/* Trip */}
+                    {trips.length > 0 && (
+                        <div style={{ marginBottom: '18px' }}>
+                            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                                {t.tripLabel}
+                            </label>
+                            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                                <button
+                                    type="button"
+                                    onClick={() => updateField('tripId', '')}
+                                    style={radioButtonStyle(!form.tripId, '#94a3b8')}
+                                >
+                                    {t.none}
+                                </button>
+                                {trips.map((trip) => (
+                                    <button
+                                        key={trip.id}
+                                        type="button"
+                                        onClick={() => updateField('tripId', trip.id)}
+                                        style={radioButtonStyle(form.tripId === trip.id, trip.color)}
+                                    >
+                                        {trip.name}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
                     {/* Notes */}
                     <div style={{ marginBottom: '24px' }}>
                         <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px' }}>
-                            📝 Notes personnelles
+                            {t.personalNotes}
                         </label>
                         <textarea
                             className="input-field"
                             value={form.notes}
                             onChange={(e) => updateField('notes', e.target.value)}
-                            placeholder="Vos réflexions, idées, dates souhaitées..."
+                            placeholder={t.notesPlaceholder}
                             rows={4}
                             style={{ resize: 'vertical', minHeight: '80px' }}
                         />
@@ -331,14 +364,14 @@ export default function DestinationForm({ destination, onSave, onCancel, categor
                         >
                             {saving
                                 ? geocoding
-                                    ? '📍 Géolocalisation...'
-                                    : '⏳ Enregistrement...'
+                                    ? t.geolocating
+                                    : t.saving
                                 : destination
-                                    ? '💾 Enregistrer'
-                                    : '✨ Ajouter'}
+                                    ? t.save
+                                    : t.add}
                         </button>
                         <button type="button" className="btn-secondary" onClick={onCancel}>
-                            Annuler
+                            {t.cancel}
                         </button>
                     </div>
                 </form>

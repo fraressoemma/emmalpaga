@@ -1,19 +1,16 @@
 /**
- * Geocode a place name to lat/lng using OpenStreetMap Nominatim (free, no API key needed)
+ * Geocode a place name to lat/lng via our server-side proxy (avoids CORS issues with Nominatim)
  */
 export async function geocode(placeName) {
     if (!placeName) return null;
 
     try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        const timeoutId = setTimeout(() => controller.abort(), 8000);
 
         const response = await fetch(
-            `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(placeName)}&limit=1`,
+            `/api/geocode?q=${encodeURIComponent(placeName)}`,
             {
-                headers: {
-                    'User-Agent': 'MyTravelList/1.0',
-                },
                 signal: controller.signal,
             }
         );

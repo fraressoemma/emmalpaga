@@ -1,9 +1,11 @@
 'use client';
 
 import { useState } from 'react';
+import { useLanguage } from '@/context/LanguageContext';
 
 export default function SearchBar({ value, onChange }) {
     const [focused, setFocused] = useState(false);
+    const { t } = useLanguage();
 
     return (
         <div
@@ -30,7 +32,7 @@ export default function SearchBar({ value, onChange }) {
                 type="text"
                 value={value}
                 onChange={(e) => onChange(e.target.value)}
-                placeholder="Rechercher une destination..."
+                placeholder={t.searchPlaceholder}
                 onFocus={() => setFocused(true)}
                 onBlur={() => setFocused(false)}
                 style={{
